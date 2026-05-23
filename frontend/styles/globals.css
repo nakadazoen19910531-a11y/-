@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Variables */
+:root {
+  --color-primary: #0066cc;
+  --color-primary-light: #e0f0fe;
+  --color-secondary: #f5f5f5;
+  --color-text: #262730;
+  --color-border: #e5e7eb;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Base Styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans JP', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  @apply font-semibold text-gray-900;
+}
+
+h1 {
+  @apply text-3xl md:text-4xl;
+}
+
+h2 {
+  @apply text-2xl md:text-3xl;
+}
+
+h3 {
+  @apply text-xl md:text-2xl;
+}
+
+/* Links */
+a {
+  @apply text-primary-500 transition-colors hover:text-primary-700;
+}
+
+/* Forms */
+input,
+textarea,
+select {
+  @apply rounded-lg border border-gray-300 px-4 py-2 transition-colors;
+  @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100;
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* Buttons */
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg font-medium transition-colors;
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+
+.btn-primary {
+  @apply bg-primary-500 px-4 py-2 text-white hover:bg-primary-600;
+  @apply focus:ring-primary-500;
+}
+
+.btn-secondary {
+  @apply border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50;
+  @apply focus:ring-primary-500;
+}
+
+.btn-danger {
+  @apply bg-danger-500 px-4 py-2 text-white hover:bg-danger-600;
+  @apply focus:ring-danger-500;
+}
+
+/* Cards */
+.card {
+  @apply rounded-lg border border-gray-200 bg-white p-6 shadow-md;
+}
+
+.card-hover {
+  @apply transition-all hover:shadow-lg;
+}
+
+/* Loading Skeleton */
+.skeleton {
+  @apply animate-pulse bg-gray-200;
+}
+
+/* Utility Classes */
+.container-custom {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+
+.transition-smooth {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 0.5rem;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #f3f4f6;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: #9ca3af;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none;
+  }
+
+  body {
+    background-color: white;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Utility for visually hidden elements (screen readers only) */
+.sr-only {
+  position: absolute;
+  margin: -0.25rem;
+  height: 0.25rem;
+  width: 0.25rem;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  clip-path: inset(50%);
+}
