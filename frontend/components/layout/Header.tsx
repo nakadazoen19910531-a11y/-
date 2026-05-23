@@ -16,7 +16,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, sidebarOpen }) => {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    router.push('/auth/login');
   };
 
   return (

@@ -39,7 +39,7 @@ const CreatePlanPage: NextPage = () => {
   }
 
   if (!isAuthenticated) {
-    router.push('/login');
+    router.push('/auth/login');
     return null;
   }
 

@@ -20,7 +20,7 @@ export default function App({ Component, pageProps }: AppProps) {
   }
 
   // Routes that don't need the main layout
-  const noLayoutRoutes = ['/login', '/register', '/404', '/500'];
+  const noLayoutRoutes = ['/auth/login', '/auth/register', '/login', '/register', '/404', '/500'];
   const shouldShowLayout = !noLayoutRoutes.includes(router.pathname);
 
   return (
