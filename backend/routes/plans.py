@@ -95,9 +95,10 @@ def generate_plan():
                 'fields': missing_fields
             }), 400
 
-        # Generate document
+        # Generate document（テンプレートIDが指定されていれば優先使用）
+        template_id = data.get('templateId') or None
         document_service = DocumentService()
-        file_path = document_service.generate_docx(data)
+        file_path = document_service.generate_docx(data, template_id=template_id)
 
         # Save plan record
         plan_service = PlanService()

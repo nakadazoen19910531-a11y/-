@@ -76,11 +76,13 @@ def register_blueprints(app: Flask) -> None:
     from routes.plans import plans_bp
     from routes.pdf import pdf_bp
     from routes.health import health_bp
+    from routes.templates import templates_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(plans_bp, url_prefix='/api/plans')
     app.register_blueprint(pdf_bp, url_prefix='/api/pdf')
     app.register_blueprint(health_bp, url_prefix='/api/health')
+    app.register_blueprint(templates_bp, url_prefix='/api/templates')
 
 
 def register_error_handlers(app: Flask) -> None:

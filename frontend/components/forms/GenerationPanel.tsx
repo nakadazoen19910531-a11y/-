@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, Loader, FileText } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Loader, FileText, LayoutTemplate } from 'lucide-react';
 import { apiPost, downloadPlan, type GenerateResponse } from '@/lib/api';
+import TemplateSelector from '@/components/forms/TemplateSelector';
 
 interface GenerationPanelProps {
   formData: Record<string, string>;
@@ -9,25 +10,23 @@ interface GenerationPanelProps {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  projectName: '工事名',
-  projectType: '工事種別',
+  projectName:    '工事名',
+  projectType:    '工事種別',
   contractNumber: '契約番号',
-  location: '工事場所',
-  startDate: '工期（始期）',
-  endDate: '工期（終期）',
+  location:       '工事場所',
+  startDate:      '工期（始期）',
+  endDate:        '工期（終期）',
   contractAmount: '契約金額',
-  client: '発注者',
-  contractor: '受注者',
+  client:         '発注者',
+  contractor:     '受注者',
 };
 
-const GenerationPanel: React.FC<GenerationPanelProps> = ({
-  formData,
-  onPrev,
-  onSuccess,
-}) => {
-  const [isGenerating, setIsGenerating] = useState(false);
+const GenerationPanel: React.FC<GenerationPanelProps> = ({ formData, onPrev, onSuccess }) => {
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const [isGenerating, setIsGenerating]   = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]                 = useState<string | null>(null);
   const [generatedPlan, setGeneratedPlan] = useState<{
     planId: string;
     filename: string;
@@ -38,11 +37,12 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
     setError(null);
 
     try {
-      const result = await apiPost<GenerateResponse>('/plans/generate', formData);
-      setGeneratedPlan({
-        planId: result.plan_id,
-        filename: result.filename,
-      });
+      const payload = {
+        ...formData,
+        ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
+      };
+      const result = await apiPost<GenerateResponse>('/plans/generate', payload);
+      setGeneratedPlan({ planId: result.plan_id, filename: result.filename });
     } catch (err) {
       setError(err instanceof Error ? err.message : '施工計画書の生成に失敗しました');
     } finally {
@@ -63,20 +63,37 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">施工計画書を作成</h2>
         <p className="mt-2 text-gray-600">
-          以下の情報で施工計画書（DOCX）を自動生成します。内容を確認して「生成」ボタンを押してください。
+          テンプレートを選択して「生成」ボタンを押すと、施工計画書（DOCX）が自動生成されます。
         </p>
       </div>
 
-      {/* 生成内容確認テーブル */}
+      {/* ── テ���プレート選択 ── */}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-5 py-4">
+          <LayoutTemplate className="h-5 w-5 text-primary-500" />
+          <h3 className="text-base font-semibold text-gray-900">テンプレートを選択</h3>
+          <span className="ml-auto rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+            {selectedTemplateId ? '選択済み' : 'デフォルト'}
+          </span>
+        </div>
+        <div className="p-5">
+          <TemplateSelector
+            selectedId={selectedTemplateId}
+            onChange={setSelectedTemplateId}
+          />
+        </div>
+      </div>
+
+      {/* ── 入力内容確認テーブル ── */}
       <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 bg-white">
           <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary-500" />
-            生成内容の確認
+            入力内容の確認
           </h3>
         </div>
         <div className="divide-y divide-gray-200">
@@ -93,7 +110,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
         </div>
       </div>
 
-      {/* 生成中 */}
+      {/* ── 生成中 ── */}
       {isGenerating && (
         <div className="flex items-center justify-center gap-4 rounded-xl border border-blue-200 bg-blue-50 p-8">
           <Loader className="h-8 w-8 animate-spin text-blue-600" />
@@ -104,7 +121,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
         </div>
       )}
 
-      {/* 生成完了 */}
+      {/* ── 生成完了 ── */}
       {generatedPlan && !isGenerating && (
         <div className="rounded-xl border border-green-200 bg-green-50 p-6">
           <div className="flex items-start gap-4">
@@ -123,7 +140,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
         </div>
       )}
 
-      {/* エラー */}
+      {/* ── エラー ── */}
       {error && (
         <div className="flex items-start gap-3 rounded-xl bg-red-50 border border-red-200 p-4 text-red-700">
           <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
@@ -131,7 +148,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
         </div>
       )}
 
-      {/* ナビゲーション */}
+      {/* ── ナビゲーション ── */}
       <div className="flex justify-between pt-6 border-t border-gray-200">
         <button
           onClick={onPrev}
@@ -165,7 +182,6 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({
                 )}
                 ダウンロード
               </button>
-
               <button
                 onClick={onSuccess}
                 className="rounded-lg bg-primary-500 px-6 py-2.5 text-white font-medium hover:bg-primary-600 transition-colors"

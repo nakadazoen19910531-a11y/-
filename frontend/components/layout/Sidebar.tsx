@@ -10,7 +10,9 @@ import {
   HelpCircle,
   X,
   User,
+  LayoutTemplate,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,61 +23,91 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   badge?: string;
+  adminOnly?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
-  const router = useRouter();
+  const router  = useRouter();
+  const { user } = useAuth();
+  const isAdmin  = user?.role === 'admin';
 
   const navigationItems: NavItem[] = [
     {
       label: '新規作成',
-      href: '/plans/create',
-      icon: <Plus className="h-5 w-5" />,
+      href:  '/plans/create',
+      icon:  <Plus className="h-5 w-5" />,
     },
     {
       label: '過去の作成履歴',
-      href: '/plans/history',
-      icon: <History className="h-5 w-5" />,
+      href:  '/plans/history',
+      icon:  <History className="h-5 w-5" />,
+    },
+    {
+      label: 'テンプレート管理',
+      href:  '/templates',
+      icon:  <LayoutTemplate className="h-5 w-5" />,
     },
     {
       label: 'NotebookLM連携',
-      href: '/notebooklm',
-      icon: <Share2 className="h-5 w-5" />,
+      href:  '/notebooklm',
+      icon:  <Share2 className="h-5 w-5" />,
     },
   ];
 
   const secondaryItems: NavItem[] = [
     {
       label: 'プロフィール',
-      href: '/profile',
-      icon: <User className="h-5 w-5" />,
+      href:  '/profile',
+      icon:  <User className="h-5 w-5" />,
     },
     {
       label: '設定',
-      href: '/settings',
-      icon: <Settings className="h-5 w-5" />,
+      href:  '/settings',
+      icon:  <Settings className="h-5 w-5" />,
     },
     {
       label: 'ヘルプ',
-      href: '/help',
-      icon: <HelpCircle className="h-5 w-5" />,
+      href:  '/help',
+      icon:  <HelpCircle className="h-5 w-5" />,
     },
   ];
 
-  const isActive = (href: string) => {
-    return router.pathname === href || router.pathname.startsWith(href + '/');
+  const isActive = (href: string) =>
+    router.pathname === href || router.pathname.startsWith(href + '/');
+
+  const renderNavItem = (item: NavItem) => {
+    if (item.adminOnly && !isAdmin) return null;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          isActive(item.href)
+            ? 'bg-primary-100 text-primary-700'
+            : 'text-gray-700 hover:bg-gray-100'
+        }`}
+      >
+        {item.icon}
+        <span className="flex-1">{item.label}</span>
+        {item.badge && (
+          <span className="rounded-full bg-primary-500 px-2 py-0.5 text-xs font-semibold text-white">
+            {item.badge}
+          </span>
+        )}
+        {item.adminOnly && (
+          <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700">
+            管理者
+          </span>
+        )}
+      </Link>
+    );
   };
 
   return (
     <>
       {/* Mobile Overlay */}
       {isOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={() => {
-            /* Close handled by Layout */
-          }}
-        />
+        <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" />
       )}
 
       {/* Sidebar */}
@@ -102,47 +134,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
         <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
           <div>
             <p className="px-3 text-xs font-semibold uppercase text-gray-500">メインメニュー</p>
-            <div className="mt-3 space-y-2">
-              {navigationItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive(item.href)
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {item.icon}
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span className="rounded-full bg-primary-500 px-2 py-0.5 text-xs font-semibold text-white">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
+            <div className="mt-3 space-y-1">
+              {navigationItems.map(renderNavItem)}
             </div>
           </div>
 
           {/* Secondary Navigation */}
           <div className="border-t border-gray-200 pt-6">
             <p className="px-3 text-xs font-semibold uppercase text-gray-500">その他</p>
-            <div className="mt-3 space-y-2">
-              {secondaryItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive(item.href)
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
-              ))}
+            <div className="mt-3 space-y-1">
+              {secondaryItems.map(renderNavItem)}
             </div>
           </div>
         </nav>

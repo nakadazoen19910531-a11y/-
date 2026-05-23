@@ -176,3 +176,61 @@ export interface ExtractResponse {
   };
   warnings?: string[] | null;
 }
+
+// ===== テンプレート =====
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  original_filename: string;
+  created_at: string;
+  size: number;
+  file_exists: boolean;
+}
+
+export interface TemplatesResponse {
+  status: string;
+  templates: Template[];
+  total: number;
+}
+
+export async function getTemplates(): Promise<TemplatesResponse> {
+  return apiGet<TemplatesResponse>('/templates/');
+}
+
+export async function uploadTemplate(
+  file: File,
+  name: string,
+  description: string
+): Promise<{ status: string; template: Template }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', name);
+  formData.append('description', description);
+  return apiUpload<{ status: string; template: Template }>('/templates/', formData);
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await apiDelete(`/templates/${id}`);
+}
+
+export async function downloadTemplate(id: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/templates/${id}/download`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, 'テンプレートのダウンロードに失敗しました');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

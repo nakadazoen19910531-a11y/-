@@ -56,11 +56,40 @@ class DocumentService:
             print('ℹ️ CORE_ENGINE_DIR 未設定 → クラウドフォールバックモードで起動')
 
     # ─── 公開 API ──────────────────────────────────────────────────────────────
-    def generate_docx(self, data: dict) -> str:
-        """DOCX を生成してファイルパスを返す"""
+    def generate_docx(self, data: dict, template_id: Optional[str] = None) -> str:
+        """DOCX を生成してファイルパスを返す。template_id が指定された場合はテンプレートを使用する"""
+        # テンプレート指定がある場合は優先してテンプレートモードで生成
+        if template_id:
+            result = self._generate_with_template(data, template_id)
+            if result:
+                return result
+            # テンプレート生成に失敗した場合は通常生成にフォールバック
+            print(f'⚠️ テンプレート生成失敗 (id={template_id}) → フォールバックへ')
+
         if self._core_available:
             return self._generate_with_core_engine(data)
         return self._generate_fallback(data)
+
+    def _generate_with_template(self, data: dict, template_id: str) -> Optional[str]:
+        """アップロード済みテンプレートを使ってプレースホルダー置換で DOCX を生成する"""
+        try:
+            from services.template_service import TemplateService
+            ts = TemplateService()
+
+            timestamp    = datetime.now().strftime('%Y%m%d_%H%M%S')
+            project_name = data.get('projectName', 'unnamed')
+            safe_name    = ''.join(c for c in project_name if c not in r'\/:*?"<>|')[:50]
+            filename     = f'{safe_name}_施工計画書_{timestamp}.docx'
+            output_path  = self.output_dir / filename
+
+            success = ts.apply_template(template_id, data, output_path)
+            if success:
+                print(f'✅ テンプレート生成成功: {output_path}')
+                return str(output_path)
+            return None
+        except Exception as e:
+            print(f'テンプレート生成エラー: {e}')
+            return None
 
     def get_file_size(self, file_path: str) -> int:
         try:
