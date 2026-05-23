@@ -41,6 +41,7 @@ type Section = 'notifications' | 'display' | 'export' | 'users';
 const SettingsPage: NextPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // 設定値
   const [settings, setSettings] = useState<AppSettings>({
@@ -181,7 +182,7 @@ const SettingsPage: NextPage = () => {
     { id: 'notifications', label: '通知設定', icon: <Bell className="h-5 w-5" /> },
     { id: 'display',       label: '表示設定', icon: <Palette className="h-5 w-5" /> },
     { id: 'export',        label: '出力設定', icon: <FileText className="h-5 w-5" /> },
-    { id: 'users',         label: 'ユーザー管理', icon: <Users className="h-5 w-5" /> },
+    ...(isAdmin ? [{ id: 'users' as Section, label: 'ユーザー管理', icon: <Users className="h-5 w-5" /> }] : []),
   ];
 
   // ─── レンダリング ──────────────────────────────────────
@@ -241,6 +242,16 @@ const SettingsPage: NextPage = () => {
 
             {/* メインコンテンツ */}
             <div className="flex-1">
+              {/* 読み取り専用バナー（管理者以外） */}
+              {!isAdmin && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-700">
+                    設定の変更は管理者のみ行えます。現在は読み取り専用です。
+                  </p>
+                </div>
+              )}
+
               <div className="rounded-lg border border-gray-200 bg-white p-8">
 
                 {/* ── 通知設定 ── */}
@@ -253,14 +264,15 @@ const SettingsPage: NextPage = () => {
                         { key: 'planFailed' as const,    label: '施工計画書の生成失敗', desc: '施工計画書の生成に失敗したときに通知を受け取ります' },
                         { key: 'weeklyReport' as const,  label: '週間レポート',         desc: '毎週月曜日に使用統計レポートを受け取ります' },
                       ].map(({ key, label, desc }) => (
-                        <div key={key} className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div key={key} className={`flex items-center justify-between p-4 rounded-lg border border-gray-200 transition-colors ${isAdmin ? 'hover:bg-gray-50' : 'opacity-70'}`}>
                           <div>
                             <p className="font-medium text-gray-900">{label}</p>
                             <p className="text-sm text-gray-600 mt-1">{desc}</p>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer">
+                          <label className={`relative inline-flex items-center ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                             <input type="checkbox" checked={settings.notifications[key]}
-                              onChange={(e) => updateNotificationSetting(key, e.target.checked)}
+                              onChange={(e) => isAdmin && updateNotificationSetting(key, e.target.checked)}
+                              disabled={!isAdmin}
                               className="sr-only peer" />
                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
                           </label>
@@ -279,10 +291,11 @@ const SettingsPage: NextPage = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-3">テーマ</label>
                         <div className="space-y-2">
                           {(['light', 'dark', 'auto'] as const).map((t) => (
-                            <label key={t} className="flex items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                            <label key={t} className={`flex items-center p-3 rounded-lg border border-gray-200 ${isAdmin ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
                               <input type="radio" name="theme" value={t}
                                 checked={settings.display.theme === t}
-                                onChange={(e) => updateDisplaySetting('theme', e.target.value)}
+                                onChange={(e) => isAdmin && updateDisplaySetting('theme', e.target.value)}
+                                disabled={!isAdmin}
                                 className="h-4 w-4 text-primary-600 border-gray-300" />
                               <span className="ml-3 text-gray-900 font-medium">
                                 {t === 'light' ? 'ライト' : t === 'dark' ? 'ダーク' : '自動'}
@@ -295,7 +308,8 @@ const SettingsPage: NextPage = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-3">言語</label>
                         <select value={settings.display.language}
                           onChange={(e) => updateDisplaySetting('language', e.target.value)}
-                          className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
+                          disabled={!isAdmin}
+                          className={`w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 ${!isAdmin ? 'cursor-not-allowed opacity-70 bg-gray-50' : ''}`}>
                           <option value="ja">日本語</option>
                           <option value="en">English</option>
                         </select>
@@ -304,7 +318,8 @@ const SettingsPage: NextPage = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-3">1ページあたりの表示件数</label>
                         <select value={settings.display.itemsPerPage}
                           onChange={(e) => updateDisplaySetting('itemsPerPage', parseInt(e.target.value))}
-                          className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
+                          disabled={!isAdmin}
+                          className={`w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 ${!isAdmin ? 'cursor-not-allowed opacity-70 bg-gray-50' : ''}`}>
                           {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}件</option>)}
                         </select>
                       </div>
@@ -321,10 +336,11 @@ const SettingsPage: NextPage = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-3">デフォルト出力形式</label>
                         <div className="space-y-2">
                           {(['docx', 'pdf'] as const).map((f) => (
-                            <label key={f} className="flex items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                            <label key={f} className={`flex items-center p-3 rounded-lg border border-gray-200 ${isAdmin ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
                               <input type="radio" name="format" value={f}
                                 checked={settings.export.defaultFormat === f}
-                                onChange={(e) => updateExportSetting('defaultFormat', e.target.value)}
+                                onChange={(e) => isAdmin && updateExportSetting('defaultFormat', e.target.value)}
+                                disabled={!isAdmin}
                                 className="h-4 w-4 text-primary-600 border-gray-300" />
                               <span className="ml-3 text-gray-900 font-medium">
                                 {f === 'docx' ? 'Word (.docx)' : 'PDF (.pdf)'}
@@ -336,14 +352,15 @@ const SettingsPage: NextPage = () => {
                           ))}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                      <div className={`flex items-center justify-between p-4 rounded-lg border border-gray-200 transition-colors ${isAdmin ? 'hover:bg-gray-50' : 'opacity-70'}`}>
                         <div>
                           <p className="font-medium text-gray-900">自動バックアップ</p>
                           <p className="text-sm text-gray-600 mt-1">生成した施工計画書を自動的にバックアップします</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className={`relative inline-flex items-center ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                           <input type="checkbox" checked={settings.export.autoBackup}
-                            onChange={(e) => updateExportSetting('autoBackup', e.target.checked)}
+                            onChange={(e) => isAdmin && updateExportSetting('autoBackup', e.target.checked)}
+                            disabled={!isAdmin}
                             className="sr-only peer" />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
                         </label>
@@ -569,11 +586,15 @@ const SettingsPage: NextPage = () => {
 
                 {/* 保存ボタン（ユーザー管理以外） */}
                 {activeSection !== 'users' && (
-                  <div className="mt-8 pt-8 border-t border-gray-200 flex justify-end">
+                  <div className="mt-8 pt-8 border-t border-gray-200 flex items-center justify-end gap-4">
+                    {!isAdmin && (
+                      <p className="text-sm text-gray-400">管理者のみ設定を変更できます</p>
+                    )}
                     <button
                       onClick={handleSaveSettings}
-                      disabled={isSaving}
-                      className="px-6 py-2.5 rounded-lg bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      disabled={isSaving || !isAdmin}
+                      title={!isAdmin ? '管理者のみ設定を変更できます' : undefined}
+                      className="px-6 py-2.5 rounded-lg bg-primary-500 text-white font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {isSaving && <Loader className="h-4 w-4 animate-spin" />}
                       保存
