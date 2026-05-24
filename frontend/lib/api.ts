@@ -387,3 +387,30 @@ export async function downloadDesignDocument(id: string, filename: string): Prom
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// 設計図書のファイル本体を Blob として取得（保存ダイアログを出さない）
+// フォーム内で「保存済み図書を選択」時に使用
+export async function fetchDesignDocumentBlob(id: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/design-documents/${id}/download`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, '設計図書の取得に失敗しました');
+  }
+  return await res.blob();
+}
+
+// 過去事例のファイル本体を Blob として取得
+export async function fetchPastCaseBlob(id: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/past-cases/${id}/download`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, '過去事例の取得に失敗しました');
+  }
+  return await res.blob();
+}

@@ -1,6 +1,28 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, AlertCircle, CheckCircle2, Loader } from 'lucide-react';
-import { apiUpload, type ExtractResponse } from '@/lib/api';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Upload,
+  FileText,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Loader,
+  FolderOpen,
+  BookOpen,
+  Plus,
+  Database,
+  Download,
+} from 'lucide-react';
+import {
+  apiUpload,
+  type ExtractResponse,
+  getDesignDocuments,
+  getPastCases,
+  fetchDesignDocumentBlob,
+  fetchPastCaseBlob,
+  downloadPastCase,
+  type DesignDocument,
+  type PastCase,
+} from '@/lib/api';
 
 interface ExtractedData {
   projectName?: string;
@@ -30,6 +52,12 @@ const FIELD_LABELS: Record<string, string> = {
   client: '発注者',
 };
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 const PDFUpload: React.FC<PDFUploadProps> = ({
   files,
   onFilesChange,
@@ -44,8 +72,35 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 保存済み設計図書・過去事例
+  const [designDocs, setDesignDocs] = useState<DesignDocument[]>([]);
+  const [pastCases, setPastCases] = useState<PastCase[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(true);
+  const [selectedDesignDocId, setSelectedDesignDocId] = useState<string>('');
+  const [selectedPastCaseId, setSelectedPastCaseId] = useState<string>('');
+  const [isImporting, setIsImporting] = useState(false);
+
+  // 初回ロード: 保存済みファイルの一覧取得
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [docsRes, casesRes] = await Promise.all([
+          getDesignDocuments(),
+          getPastCases(),
+        ]);
+        setDesignDocs(docsRes.design_documents || []);
+        setPastCases(casesRes.past_cases || []);
+      } catch (e) {
+        console.warn('保存済み一覧の取得失敗:', e);
+      } finally {
+        setLoadingSaved(false);
+      }
+    };
+    load();
+  }, []);
+
   const addFiles = (newFiles: File[]) => {
-    const pdfFiles = newFiles.filter((f) => f.type === 'application/pdf');
+    const pdfFiles = newFiles.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
     if (pdfFiles.length !== newFiles.length) {
       setError('PDFファイル以外はアップロードできません');
     } else {
@@ -73,6 +128,55 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
     setExtractedData(null);
   };
 
+  // 保存済み設計図書を選択して追加
+  const handleAddSavedDesignDoc = async () => {
+    if (!selectedDesignDocId) return;
+    const doc = designDocs.find((d) => d.id === selectedDesignDocId);
+    if (!doc) return;
+
+    setIsImporting(true);
+    setError(null);
+    try {
+      const blob = await fetchDesignDocumentBlob(doc.id);
+      const file = new File([blob], doc.original_filename || `${doc.name}.pdf`, {
+        type: doc.mime_type || 'application/pdf',
+      });
+
+      // 重複チェック
+      if (files.some((f) => f.name === file.name)) {
+        setError(`「${file.name}」は既に追加されています`);
+        setIsImporting(false);
+        return;
+      }
+
+      // PDF以外は警告
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        setError(`「${file.name}」はPDFではありません。自動データ抽出は使えませんが、参考としては保管できます`);
+      }
+
+      onFilesChange([...files, file]);
+      setSelectedDesignDocId('');
+      setExtractedData(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '設計図書の読み込みに失敗しました');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // 保存済み過去事例を参考としてDL（ファイル一覧には追加しない）
+  const handleDownloadSavedPastCase = async () => {
+    if (!selectedPastCaseId) return;
+    const pc = pastCases.find((p) => p.id === selectedPastCaseId);
+    if (!pc) return;
+
+    try {
+      await downloadPastCase(pc.id, pc.original_filename || `${pc.name}.docx`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '過去事例のダウンロードに失敗しました');
+    }
+  };
+
   const handleExtract = async () => {
     if (files.length === 0) {
       setError('PDFファイルを選択してください');
@@ -96,7 +200,6 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
         setWarnings(result.warnings);
       }
 
-      // 親コンポーネントに抽出データを渡す
       if (onExtracted) {
         onExtracted(data);
       }
@@ -107,47 +210,175 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
     }
   };
 
+  // PDFのみのフィルタ済み一覧
+  const pdfDesignDocs = designDocs.filter((d) => {
+    const ext = (d.original_filename || '').toLowerCase().split('.').pop();
+    return ext === 'pdf' || d.mime_type === 'application/pdf';
+  });
+  const otherDesignDocs = designDocs.filter((d) => {
+    const ext = (d.original_filename || '').toLowerCase().split('.').pop();
+    return ext !== 'pdf' && d.mime_type !== 'application/pdf';
+  });
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">設計図書（PDF）をアップロード</h2>
+        <h2 className="text-2xl font-bold text-gray-900">設計図書（PDF）を準備</h2>
         <p className="mt-2 text-gray-600">
-          設計図書のPDFをアップロードすると、契約番号・工事場所・工期・契約金額を自動抽出します。
+          保存済みの設計図書から選ぶか、新しいPDFをアップロードします。<br />
+          選択後「データを自動抽出」を押すと、契約番号・工事場所・工期・契約金額などを自動で読み取ります。
         </p>
       </div>
 
-      {/* ドロップゾーン */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-          isDragging
-            ? 'border-primary-400 bg-primary-50'
-            : 'border-gray-300 bg-gray-50 hover:border-primary-400 hover:bg-primary-50'
-        }`}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".pdf"
-          onChange={handleFileInput}
-          className="hidden"
-        />
-        <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-        <p className="text-sm font-medium text-gray-900">
-          PDFファイルをドラッグ＆ドロップ
-        </p>
-        <p className="text-xs text-gray-500 mt-1">またはクリックしてファイルを選択</p>
-        <p className="text-xs text-gray-400 mt-2">最大 50MB / ファイル</p>
+      {/* ─── 保存済みから選択 ────────────────────────────────────────────── */}
+      <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 bg-blue-100/60 border-b border-blue-200">
+          <Database className="h-5 w-5 text-blue-700" />
+          <h3 className="font-semibold text-blue-900">保存済みのファイルから選ぶ</h3>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* 設計図書ドロップダウン */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-800 mb-2">
+              <FolderOpen className="h-4 w-4 text-primary-600" />
+              設計図書（PDFのみ追加可能）
+              {loadingSaved ? (
+                <span className="text-xs text-gray-500">読み込み中...</span>
+              ) : (
+                <span className="text-xs text-gray-500">{pdfDesignDocs.length}件</span>
+              )}
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              <select
+                value={selectedDesignDocId}
+                onChange={(e) => setSelectedDesignDocId(e.target.value)}
+                disabled={loadingSaved || pdfDesignDocs.length === 0}
+                className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-100"
+              >
+                <option value="">
+                  {pdfDesignDocs.length === 0
+                    ? '保存済みPDF設計図書がありません'
+                    : '設計図書を選択してください'}
+                </option>
+                {pdfDesignDocs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    [{d.document_type || '種別未設定'}] {d.name}
+                    {d.project_name ? ` (${d.project_name})` : ''}
+                    {d.year ? ` ${d.year}` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddSavedDesignDoc}
+                disabled={!selectedDesignDocId || isImporting}
+                className="flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm text-white font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isImporting ? (
+                  <Loader className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                ファイル一覧に追加
+              </button>
+            </div>
+            {otherDesignDocs.length > 0 && (
+              <p className="mt-2 text-xs text-gray-500">
+                ※ PDF以外（DOCX/XLSX/ZIP）の設計図書が {otherDesignDocs.length} 件あります。
+                自動抽出には使えませんが、「設計図書」メニューから個別にダウンロードできます。
+              </p>
+            )}
+          </div>
+
+          {/* 過去事例ドロップダウン */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-800 mb-2">
+              <BookOpen className="h-4 w-4 text-primary-600" />
+              過去事例（参考としてダウンロード）
+              {!loadingSaved && (
+                <span className="text-xs text-gray-500">{pastCases.length}件</span>
+              )}
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              <select
+                value={selectedPastCaseId}
+                onChange={(e) => setSelectedPastCaseId(e.target.value)}
+                disabled={loadingSaved || pastCases.length === 0}
+                className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-gray-100"
+              >
+                <option value="">
+                  {pastCases.length === 0
+                    ? '保存済み過去事例がありません'
+                    : '過去事例を選択してください'}
+                </option>
+                {pastCases.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.project_type ? ` [${p.project_type}]` : ''}
+                    {p.client ? ` - ${p.client}` : ''}
+                    {p.year ? ` (${p.year})` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleDownloadSavedPastCase}
+                disabled={!selectedPastCaseId}
+                className="flex items-center gap-1.5 rounded-lg border border-primary-500 bg-white px-4 py-2 text-sm text-primary-600 font-medium hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="h-4 w-4" />
+                ダウンロードして参考にする
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              ※ 過去事例はDOCXファイルです。ダウンロードしてWord等で開き、参考として参照してください。
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* ファイル一覧 */}
+      {/* ─── 新規アップロード ────────────────────────────────────────────── */}
+      <div className="rounded-xl border-2 border-gray-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 bg-gray-100 border-b border-gray-200">
+          <Upload className="h-5 w-5 text-gray-700" />
+          <h3 className="font-semibold text-gray-900">または、新しいPDFをアップロード</h3>
+        </div>
+
+        <div className="p-5">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+              isDragging
+                ? 'border-primary-400 bg-primary-50'
+                : 'border-gray-300 bg-gray-50 hover:border-primary-400 hover:bg-primary-50'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf"
+              onChange={handleFileInput}
+              className="hidden"
+            />
+            <Upload className="mx-auto h-10 w-10 text-gray-400 mb-2" />
+            <p className="text-sm font-medium text-gray-900">
+              PDFファイルをドラッグ＆ドロップ
+            </p>
+            <p className="text-xs text-gray-500 mt-1">またはクリックしてファイルを選択（最大 50MB / ファイル）</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ファイル一覧（選択済み・追加済み） */}
       {files.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-900">選択済みファイル</h3>
+          <h3 className="text-sm font-semibold text-gray-900">
+            選択済みファイル
+            <span className="ml-2 text-gray-500 font-normal">{files.length}件</span>
+          </h3>
           {files.map((file, i) => (
             <div
               key={i}
@@ -157,12 +388,13 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
                 <FileText className="h-5 w-5 text-red-400 flex-shrink-0" />
                 <div>
                   <p className="text-sm text-gray-900 font-medium">{file.name}</p>
-                  <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  <p className="text-xs text-gray-500">{formatSize(file.size)}</p>
                 </div>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); handleRemoveFile(i); }}
                 className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                title="一覧から外す"
               >
                 <X className="h-4 w-4" />
               </button>
