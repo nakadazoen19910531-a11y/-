@@ -4,8 +4,11 @@ GET    /api/past-cases/              過去事例一覧（認証必須）
 POST   /api/past-cases/              過去事例アップロード（管理者のみ）
 DELETE /api/past-cases/<id>          過去事例削除（管理者のみ）
 GET    /api/past-cases/<id>/download 過去事例ダウンロード（認証必須）
+
+対応ファイル形式: PDF / DOCX / DOC / XLSX / XLS / ZIP
 """
 import io
+from pathlib import Path
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.past_case_service import PastCaseService
@@ -13,6 +16,9 @@ from models.user import UserModel
 
 past_cases_bp = Blueprint('past_cases', __name__)
 _past_case_service = PastCaseService()
+
+# アップロード許可される拡張子
+_ALLOWED_EXTS = {'.pdf', '.docx', '.doc', '.xlsx', '.xls', '.zip'}
 
 
 def _is_admin(user_id: str) -> bool:
@@ -57,8 +63,12 @@ def upload_past_case():
     if not file or not file.filename:
         return jsonify({'error': 'ファイルが選択されていません'}), 400
 
-    if not file.filename.lower().endswith('.docx'):
-        return jsonify({'error': 'DOCXファイル（.docx）のみアップロード可能です'}), 400
+    ext = Path(file.filename).suffix.lower()
+    if ext not in _ALLOWED_EXTS:
+        return jsonify({
+            'error': f'対応していないファイル形式です（{ext}）',
+            'message': f'対応形式: {", ".join(sorted(_ALLOWED_EXTS))}'
+        }), 400
 
     name         = request.form.get('name', '').strip() or file.filename
     description  = request.form.get('description', '').strip()
@@ -71,8 +81,9 @@ def upload_past_case():
         file_bytes = file.read()
         if len(file_bytes) == 0:
             return jsonify({'error': 'ファイルが空です'}), 400
-        if len(file_bytes) > 50 * 1024 * 1024:  # 50 MB 上限
-            return jsonify({'error': 'ファイルサイズは50MB以下にしてください'}), 400
+        # 過去事例（PDF・Excel等含む）は最大100MB
+        if len(file_bytes) > 100 * 1024 * 1024:
+            return jsonify({'error': 'ファイルサイズは100MB以下にしてください'}), 400
 
         past_case = _past_case_service.save(
             name=name,
@@ -123,12 +134,13 @@ def download_past_case(case_id: str):
         if not file_bytes:
             return jsonify({'error': '過去事例ファイルが見つかりません'}), 404
 
-        download_name = past_case.get('original_filename') or f'{past_case["name"]}.docx'
+        download_name = past_case.get('original_filename') or past_case['name']
+        mime_type = past_case.get('mime_type') or 'application/octet-stream'
         return send_file(
             io.BytesIO(file_bytes),
             as_attachment=True,
             download_name=download_name,
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            mimetype=mime_type,
         )
     except Exception as e:
         return jsonify({'error': 'ダウンロードに失敗しました', 'message': str(e)}), 500

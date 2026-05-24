@@ -2,13 +2,16 @@
 過去事例（施工計画書）管理サービス - デュアルモード実装
 
 SUPABASE_URL / SUPABASE_KEY が設定されている場合: Supabase PostgreSQL を使用
-（ファイルデータは base64 エンコードして file_data_b64 カラムに保存）
+（ファイル本体は Supabase Storage に保存、メタデータのみ DB）
 未設定の場合: JSON ファイル + ローカルファイルシステムによるフォールバック
+
+対応形式: PDF / DOCX / DOC / XLSX / XLS / ZIP
 """
 import base64
 import json
 import os
 import uuid
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -17,9 +20,28 @@ from typing import Optional, List, Dict, Any
 # JSON フォールバック用データディレクトリ
 _BASE_DIR = Path(__file__).parent.parent / 'data' / 'past_cases'
 
+# 対応拡張子 → MIMEタイプ
+_EXT_TO_MIME = {
+    '.pdf':  'application/pdf',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.doc':  'application/msword',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls':  'application/vnd.ms-excel',
+    '.zip':  'application/zip',
+}
+
+
+def guess_mime_type(filename: str) -> str:
+    """ファイル名から MIME タイプを推定"""
+    ext = Path(filename).suffix.lower()
+    if ext in _EXT_TO_MIME:
+        return _EXT_TO_MIME[ext]
+    mime, _ = mimetypes.guess_type(filename)
+    return mime or 'application/octet-stream'
+
 
 class PastCaseService:
-    """過去事例 DOCX の CRUD を管理するサービス（Supabase優先 / JSONフォールバック）"""
+    """過去事例の CRUD を管理するサービス（Supabase優先 / JSONフォールバック）"""
 
     def __init__(self, data_dir: Optional[Path] = None):
         from db.supabase_client import get_client
@@ -62,7 +84,7 @@ class PastCaseService:
             try:
                 res = (
                     self._sb.table('past_cases')
-                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by, storage_path')
+                    .select('id, name, description, project_type, client, location, year, original_filename, mime_type, file_size, created_at, uploaded_by, storage_path')
                     .order('created_at', desc=True)
                     .execute()
                 )
@@ -75,7 +97,8 @@ class PastCaseService:
         past_cases = self._load_metadata().get('past_cases', [])
         result = []
         for p in past_cases:
-            file_path = self.files_dir / f"{p['id']}.docx"
+            ext = Path(p.get('original_filename', '')).suffix.lower() or '.dat'
+            file_path = self.files_dir / f"{p['id']}{ext}"
             p['file_exists'] = file_path.exists()
             result.append(p)
         return result
@@ -88,7 +111,7 @@ class PastCaseService:
             try:
                 res = (
                     self._sb.table('past_cases')
-                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by, storage_path')
+                    .select('id, name, description, project_type, client, location, year, original_filename, mime_type, file_size, created_at, uploaded_by, storage_path')
                     .eq('id', case_id)
                     .execute()
                 )
@@ -133,7 +156,11 @@ class PastCaseService:
                 return None
 
         # JSON fallback
-        file_path = self.files_dir / f'{case_id}.docx'
+        meta = self.get_by_id(case_id)
+        if not meta:
+            return None
+        ext = Path(meta.get('original_filename', '')).suffix.lower() or '.dat'
+        file_path = self.files_dir / f'{case_id}{ext}'
         if file_path.exists():
             return file_path.read_bytes()
         return None
@@ -152,10 +179,12 @@ class PastCaseService:
         year: str = '',
         uploaded_by: str = '',
     ) -> Dict:
-        """過去事例を保存してメタデータを返す"""
+        """過去事例を保存してメタデータを返す。PDF/DOCX/XLSX/ZIP対応"""
         case_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat() + 'Z'
         file_size = len(file_bytes)
+        mime_type = guess_mime_type(original_filename)
+        ext = Path(original_filename).suffix.lower() or '.dat'
 
         if self._sb:
             try:
@@ -165,8 +194,8 @@ class PastCaseService:
                     category='past-cases',
                     file_id=case_id,
                     file_bytes=file_bytes,
-                    filename_ext='.docx',
-                    content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    filename_ext=ext,
+                    content_type=mime_type,
                 )
 
                 row = {
@@ -178,6 +207,7 @@ class PastCaseService:
                     'location': location,
                     'year': year,
                     'original_filename': original_filename,
+                    'mime_type': mime_type,
                     'file_size': file_size,
                     'created_at': now,
                     'uploaded_by': uploaded_by,
@@ -194,7 +224,7 @@ class PastCaseService:
                 raise Exception(f'過去事例の保存に失敗しました: {e}')
 
         # JSON fallback
-        file_path = self.files_dir / f'{case_id}.docx'
+        file_path = self.files_dir / f'{case_id}{ext}'
         file_path.write_bytes(file_bytes)
 
         case_meta: Dict = {
@@ -206,6 +236,7 @@ class PastCaseService:
             'location': location,
             'year': year,
             'original_filename': original_filename,
+            'mime_type': mime_type,
             'created_at': now,
             'size': file_size,
             'uploaded_by': uploaded_by,
@@ -249,12 +280,14 @@ class PastCaseService:
                 return False
 
         # JSON fallback
-        past_cases = self._load_metadata().get('past_cases', [])
-        if not any(p['id'] == case_id for p in past_cases):
+        meta = self.get_by_id(case_id)
+        if not meta:
             return False
-        file_path = self.files_dir / f'{case_id}.docx'
+        ext = Path(meta.get('original_filename', '')).suffix.lower() or '.dat'
+        file_path = self.files_dir / f'{case_id}{ext}'
         if file_path.exists():
             file_path.unlink()
+        past_cases = self._load_metadata().get('past_cases', [])
         past_cases = [p for p in past_cases if p['id'] != case_id]
         self._save_metadata(past_cases)
         return True
@@ -272,6 +305,7 @@ class PastCaseService:
             'location': row.get('location', ''),
             'year': row.get('year', ''),
             'original_filename': row.get('original_filename', ''),
+            'mime_type': row.get('mime_type', 'application/octet-stream'),
             'size': row.get('file_size', row.get('size', 0)),
             'created_at': row.get('created_at', ''),
             'uploaded_by': row.get('uploaded_by', ''),

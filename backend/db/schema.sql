@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS templates (
 
 -- ── 過去事例テーブル ──────────────────────────────────────────
 -- ファイル本体は Supabase Storage (sekoplan-files/past-cases/) に保存
+-- 対応形式: PDF / DOCX / DOC / XLSX / XLS / ZIP
 CREATE TABLE IF NOT EXISTS past_cases (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS past_cases (
   location          TEXT DEFAULT '',
   year              TEXT DEFAULT '',
   original_filename TEXT,
+  mime_type         TEXT DEFAULT 'application/octet-stream',
   file_data_b64     TEXT,  -- レガシー：base64（移行後不要）
   storage_path      TEXT,  -- Supabase Storage 上のパス
   file_size         INTEGER DEFAULT 0,

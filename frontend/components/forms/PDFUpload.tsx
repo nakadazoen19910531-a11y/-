@@ -311,14 +311,18 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
                     ? '保存済み過去事例がありません'
                     : '過去事例を選択してください'}
                 </option>
-                {pastCases.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.project_type ? ` [${p.project_type}]` : ''}
-                    {p.client ? ` - ${p.client}` : ''}
-                    {p.year ? ` (${p.year})` : ''}
-                  </option>
-                ))}
+                {pastCases.map((p) => {
+                  const ext = (p.original_filename || '').toLowerCase().split('.').pop();
+                  const typeLabel = ext ? `(${ext.toUpperCase()})` : '';
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {typeLabel} {p.name}
+                      {p.project_type ? ` [${p.project_type}]` : ''}
+                      {p.client ? ` - ${p.client}` : ''}
+                      {p.year ? ` ${p.year}` : ''}
+                    </option>
+                  );
+                })}
               </select>
               <button
                 onClick={handleDownloadSavedPastCase}
@@ -330,7 +334,7 @@ const PDFUpload: React.FC<PDFUploadProps> = ({
               </button>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              ※ 過去事例はDOCXファイルです。ダウンロードしてWord等で開き、参考として参照してください。
+              ※ 過去事例は PDF / Word / Excel など様々な形式があります。ダウンロードして対応するソフトで開き、参考として参照してください。
             </p>
           </div>
         </div>

@@ -11,6 +11,9 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  FileSpreadsheet,
+  FileArchive,
+  FileSearch,
   Plus,
   RefreshCw,
   Lock,
@@ -24,6 +27,22 @@ import {
   downloadPastCase,
   type PastCase,
 } from '@/lib/api';
+
+// ファイル種別に応じたアイコン
+function FileIcon({ filename }: { filename: string }) {
+  const ext = (filename || '').toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'pdf':
+      return <FileSearch className="h-5 w-5 text-red-600" />;
+    case 'xlsx':
+    case 'xls':
+      return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
+    case 'zip':
+      return <FileArchive className="h-5 w-5 text-yellow-600" />;
+    default:
+      return <FileText className="h-5 w-5 text-blue-600" />;
+  }
+}
 
 // バイト数を人間が読みやすい文字列に変換
 function formatSize(bytes: number): string {
@@ -112,12 +131,14 @@ const PastCasesPage: NextPage = () => {
 
   // ファイル選択
   const handleFileSelect = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.docx')) {
-      setUploadError('DOCXファイル（.docx）のみアップロード可能です');
+    const allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.zip'];
+    const ext = '.' + (file.name.toLowerCase().split('.').pop() || '');
+    if (!allowed.includes(ext)) {
+      setUploadError(`対応していないファイル形式です（${ext}）。対応: ${allowed.join(', ')}`);
       return;
     }
     setUploadFile(file);
-    if (!uploadName) setUploadName(file.name.replace(/\.docx$/i, ''));
+    if (!uploadName) setUploadName(file.name.replace(/\.[^.]+$/, ''));
     setUploadError(null);
   };
 
@@ -303,14 +324,14 @@ const PastCasesPage: NextPage = () => {
                     <input
                       ref={fileRef}
                       type="file"
-                      accept=".docx"
+                      accept=".pdf,.docx,.doc,.xlsx,.xls,.zip"
                       className="hidden"
                       onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
                     />
                     {uploadFile ? (
                       <>
-                        <FileText className="h-10 w-10 text-green-500 mb-2" />
-                        <p className="text-sm font-medium text-green-700">{uploadFile.name}</p>
+                        <FileIcon filename={uploadFile.name} />
+                        <p className="text-sm font-medium text-green-700 mt-2">{uploadFile.name}</p>
                         <p className="text-xs text-green-600 mt-1">{formatSize(uploadFile.size)}</p>
                         <p className="text-xs text-gray-500 mt-2">クリックして変更</p>
                       </>
@@ -318,9 +339,11 @@ const PastCasesPage: NextPage = () => {
                       <>
                         <Upload className="h-10 w-10 text-gray-300 mb-2" />
                         <p className="text-sm font-medium text-gray-700">
-                          DOCXファイルをドロップ、またはクリックして選択
+                          ファイルをドロップ、またはクリックして選択
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">.docx ファイルのみ（最大50MB）</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          PDF / DOCX / XLSX / ZIP（最大100MB）
+                        </p>
                       </>
                     )}
                   </div>
@@ -503,8 +526,8 @@ const PastCasesPage: NextPage = () => {
                     key={pc.id}
                     className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-100">
-                      <FileText className="h-5 w-5 text-primary-600" />
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                      <FileIcon filename={pc.original_filename} />
                     </div>
 
                     <div className="flex-1 min-w-0">

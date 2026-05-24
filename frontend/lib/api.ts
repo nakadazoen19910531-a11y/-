@@ -246,6 +246,7 @@ export interface PastCase {
   location: string;
   year: string;
   original_filename: string;
+  mime_type: string;
   size: number;
   created_at: string;
   uploaded_by: string;
