@@ -37,24 +37,30 @@ CREATE TABLE IF NOT EXISTS plans (
   client          TEXT,
   contractor      TEXT,
   -- フォームデータ全体（JSON文字列として保存）
-  full_data       TEXT
+  full_data       TEXT,
+  -- 生成された DOCX を Supabase Storage に永続化したパス
+  storage_path    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS plans_user_id_idx ON plans (user_id);
 CREATE INDEX IF NOT EXISTS plans_created_at_idx ON plans (created_at DESC);
 
 -- ── テンプレートテーブル ──────────────────────────────────────
+-- ファイル本体は Supabase Storage (sekoplan-files/templates/) に保存
+-- storage_path にそのパスを記録。file_data_b64 はレガシー互換用
 CREATE TABLE IF NOT EXISTS templates (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
   description       TEXT DEFAULT '',
   original_filename TEXT,
-  file_data_b64     TEXT,  -- base64エンコードされたDOCXファイル内容
+  file_data_b64     TEXT,  -- レガシー：base64エンコード（移行後不要）
+  storage_path      TEXT,  -- Supabase Storage 上のパス
   file_size         INTEGER DEFAULT 0,
   created_at        TEXT NOT NULL
 );
 
 -- ── 過去事例テーブル ──────────────────────────────────────────
+-- ファイル本体は Supabase Storage (sekoplan-files/past-cases/) に保存
 CREATE TABLE IF NOT EXISTS past_cases (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
@@ -64,7 +70,8 @@ CREATE TABLE IF NOT EXISTS past_cases (
   location          TEXT DEFAULT '',
   year              TEXT DEFAULT '',
   original_filename TEXT,
-  file_data_b64     TEXT,  -- base64エンコードされたDOCXファイル内容
+  file_data_b64     TEXT,  -- レガシー：base64（移行後不要）
+  storage_path      TEXT,  -- Supabase Storage 上のパス
   file_size         INTEGER DEFAULT 0,
   created_at        TEXT NOT NULL,
   uploaded_by       TEXT
@@ -86,7 +93,8 @@ CREATE TABLE IF NOT EXISTS design_documents (
   year              TEXT DEFAULT '',
   original_filename TEXT,
   mime_type         TEXT DEFAULT 'application/octet-stream',
-  file_data_b64     TEXT,  -- base64エンコードされたファイル内容（PDF/DOCX/XLSX/ZIP対応）
+  file_data_b64     TEXT,  -- レガシー：base64（移行後不要）
+  storage_path      TEXT,  -- Supabase Storage 上のパス
   file_size         INTEGER DEFAULT 0,
   created_at        TEXT NOT NULL,
   uploaded_by       TEXT

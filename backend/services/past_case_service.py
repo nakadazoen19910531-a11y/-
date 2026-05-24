@@ -62,7 +62,7 @@ class PastCaseService:
             try:
                 res = (
                     self._sb.table('past_cases')
-                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by')
+                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by, storage_path')
                     .order('created_at', desc=True)
                     .execute()
                 )
@@ -88,7 +88,7 @@ class PastCaseService:
             try:
                 res = (
                     self._sb.table('past_cases')
-                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by')
+                    .select('id, name, description, project_type, client, location, year, original_filename, file_size, created_at, uploaded_by, storage_path')
                     .eq('id', case_id)
                     .execute()
                 )
@@ -107,13 +107,27 @@ class PastCaseService:
             try:
                 res = (
                     self._sb.table('past_cases')
-                    .select('file_data_b64')
+                    .select('storage_path, file_data_b64')
                     .eq('id', case_id)
                     .execute()
                 )
-                if not res.data or not res.data[0].get('file_data_b64'):
+                if not res.data:
                     return None
-                return base64.b64decode(res.data[0]['file_data_b64'])
+                row = res.data[0]
+
+                # 1) Storage 優先
+                storage_path = row.get('storage_path')
+                if storage_path:
+                    from services import storage_service
+                    data = storage_service.download(storage_path)
+                    if data is not None:
+                        return data
+
+                # 2) フォールバック: base64
+                b64 = row.get('file_data_b64')
+                if b64:
+                    return base64.b64decode(b64)
+                return None
             except Exception as e:
                 print(f'Supabase get_file_bytes 過去事例エラー: {e}')
                 return None
@@ -145,6 +159,16 @@ class PastCaseService:
 
         if self._sb:
             try:
+                # 1) Supabase Storage にアップロード
+                from services import storage_service
+                storage_path = storage_service.upload(
+                    category='past-cases',
+                    file_id=case_id,
+                    file_bytes=file_bytes,
+                    filename_ext='.docx',
+                    content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                )
+
                 row = {
                     'id': case_id,
                     'name': name,
@@ -154,11 +178,16 @@ class PastCaseService:
                     'location': location,
                     'year': year,
                     'original_filename': original_filename,
-                    'file_data_b64': base64.b64encode(file_bytes).decode('ascii'),
                     'file_size': file_size,
                     'created_at': now,
                     'uploaded_by': uploaded_by,
+                    'storage_path': storage_path,
                 }
+                # Storage 失敗時は base64 フォールバック
+                if not storage_path:
+                    print('⚠️ Storage アップロード失敗 → base64 で保存')
+                    row['file_data_b64'] = base64.b64encode(file_bytes).decode('ascii')
+
                 self._sb.table('past_cases').insert(row).execute()
                 return self._normalize(row, file_exists=True)
             except Exception as e:
@@ -190,9 +219,24 @@ class PastCaseService:
     # ─── 削除 ──────────────────────────────────────────────────────────────────
 
     def delete(self, case_id: str) -> bool:
-        """過去事例を削除する。成功なら True"""
+        """過去事例を削除する。成功なら True。Storage上のファイルも削除する。"""
         if self._sb:
             try:
+                # 1) Storage 上のファイルを削除
+                try:
+                    res_fetch = (
+                        self._sb.table('past_cases')
+                        .select('storage_path')
+                        .eq('id', case_id)
+                        .execute()
+                    )
+                    if res_fetch.data and res_fetch.data[0].get('storage_path'):
+                        from services import storage_service
+                        storage_service.delete(res_fetch.data[0]['storage_path'])
+                except Exception as e:
+                    print(f'⚠️ Storage削除失敗（DBは削除続行）: {e}')
+
+                # 2) DB行削除
                 res = (
                     self._sb.table('past_cases')
                     .delete()
@@ -231,5 +275,6 @@ class PastCaseService:
             'size': row.get('file_size', row.get('size', 0)),
             'created_at': row.get('created_at', ''),
             'uploaded_by': row.get('uploaded_by', ''),
+            'storage_path': row.get('storage_path'),
             'file_exists': file_exists,
         }

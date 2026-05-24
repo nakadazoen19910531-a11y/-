@@ -1,9 +1,11 @@
 """
-テンプレート管理サービス - デュアルモード実装
+テンプレート管理サービス - Supabase Storage 優先実装
 
-SUPABASE_URL / SUPABASE_KEY が設定されている場合: Supabase PostgreSQL を使用
-（ファイルデータは base64 エンコードして file_data_b64 カラムに保存）
-未設定の場合: JSON ファイル + ローカルファイルシステムによるフォールバック
+ファイル本体: Supabase Storage (sekoplan-files/templates/<uuid>.docx)
+メタデータ : Supabase PostgreSQL (templates テーブル)
+レガシー   : file_data_b64 カラムによる base64 保存も読み取り互換
+
+Supabase 未設定時は JSON + ローカルファイルのフォールバック
 """
 import base64
 import json
@@ -20,7 +22,7 @@ _BASE_DIR = Path(__file__).parent.parent / 'data' / 'templates'
 
 
 class TemplateService:
-    """DOCX テンプレートの CRUD を管理するサービス（Supabase優先 / JSONフォールバック）"""
+    """DOCX テンプレートの CRUD を管理するサービス（Supabase Storage優先 / JSONフォールバック）"""
 
     def __init__(self, data_dir: Optional[Path] = None):
         from db.supabase_client import get_client
@@ -63,8 +65,7 @@ class TemplateService:
             try:
                 res = (
                     self._sb.table('templates')
-                    # file_data_b64 は大きいので除外
-                    .select('id, name, description, original_filename, file_size, created_at')
+                    .select('id, name, description, original_filename, file_size, created_at, storage_path')
                     .order('created_at', desc=True)
                     .execute()
                 )
@@ -90,7 +91,7 @@ class TemplateService:
             try:
                 res = (
                     self._sb.table('templates')
-                    .select('id, name, description, original_filename, file_size, created_at')
+                    .select('id, name, description, original_filename, file_size, created_at, storage_path')
                     .eq('id', template_id)
                     .execute()
                 )
@@ -106,16 +107,32 @@ class TemplateService:
     def get_file_bytes(self, template_id: str) -> Optional[bytes]:
         """テンプレートのファイルバイト列を返す（ダウンロード用）"""
         if self._sb:
+            # 1) storage_path があれば Storage から取得
             try:
                 res = (
                     self._sb.table('templates')
-                    .select('file_data_b64')
+                    .select('storage_path, file_data_b64')
                     .eq('id', template_id)
                     .execute()
                 )
-                if not res.data or not res.data[0].get('file_data_b64'):
+                if not res.data:
                     return None
-                return base64.b64decode(res.data[0]['file_data_b64'])
+                row = res.data[0]
+
+                # Storage 優先
+                storage_path = row.get('storage_path')
+                if storage_path:
+                    from services import storage_service
+                    data = storage_service.download(storage_path)
+                    if data is not None:
+                        return data
+                    print(f'⚠️ Storage からの取得失敗 → base64 フォールバック試行')
+
+                # 2) フォールバック: base64
+                b64 = row.get('file_data_b64')
+                if b64:
+                    return base64.b64decode(b64)
+                return None
             except Exception as e:
                 print(f'Supabase get_file_bytes エラー: {e}')
                 return None
@@ -153,22 +170,39 @@ class TemplateService:
         file_bytes: bytes,
         original_filename: str
     ) -> Dict:
-        """テンプレートを保存してメタデータを返す"""
+        """テンプレートを保存してメタデータを返す。
+        Supabase Storage にファイルをアップロードし、メタデータをDBに保存する。
+        Storage 失敗時は base64 フォールバックでDB保存する。"""
         template_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat() + 'Z'
         file_size = len(file_bytes)
 
         if self._sb:
             try:
+                # 1) Supabase Storage にアップロード
+                from services import storage_service
+                storage_path = storage_service.upload(
+                    category='templates',
+                    file_id=template_id,
+                    file_bytes=file_bytes,
+                    filename_ext='.docx',
+                    content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                )
+
                 row = {
                     'id': template_id,
                     'name': name,
                     'description': description,
                     'original_filename': original_filename,
-                    'file_data_b64': base64.b64encode(file_bytes).decode('ascii'),
                     'file_size': file_size,
                     'created_at': now,
+                    'storage_path': storage_path,  # 成功時のみセット
                 }
+                # Storage 失敗時は base64 フォールバック
+                if not storage_path:
+                    print('⚠️ Storage アップロード失敗 → base64 で保存')
+                    row['file_data_b64'] = base64.b64encode(file_bytes).decode('ascii')
+
                 self._sb.table('templates').insert(row).execute()
                 return self._normalize(row, file_exists=True)
             except Exception as e:
@@ -195,9 +229,24 @@ class TemplateService:
     # ─── 削除 ──────────────────────────────────────────────────────────────────
 
     def delete(self, template_id: str) -> bool:
-        """テンプレートを削除する。成功なら True"""
+        """テンプレートを削除する。成功なら True。Storage上のファイルも削除する。"""
         if self._sb:
             try:
+                # 1) storage_path を取得して Storage 上のファイルを削除
+                try:
+                    res_fetch = (
+                        self._sb.table('templates')
+                        .select('storage_path')
+                        .eq('id', template_id)
+                        .execute()
+                    )
+                    if res_fetch.data and res_fetch.data[0].get('storage_path'):
+                        from services import storage_service
+                        storage_service.delete(res_fetch.data[0]['storage_path'])
+                except Exception as e:
+                    print(f'⚠️ Storage 上のファイル削除失敗（DBは削除続行）: {e}')
+
+                # 2) DB 行削除
                 res = (
                     self._sb.table('templates')
                     .delete()
@@ -289,6 +338,7 @@ class TemplateService:
             'original_filename': row.get('original_filename', ''),
             'size': row.get('file_size', row.get('size', 0)),
             'created_at': row.get('created_at', ''),
+            'storage_path': row.get('storage_path'),
             'file_exists': file_exists,
         }
 

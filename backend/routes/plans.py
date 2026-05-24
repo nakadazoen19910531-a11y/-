@@ -1,7 +1,8 @@
 """Construction plan endpoints"""
+import io
+import os
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
-import os
 from services.plan_service import PlanService
 from services.document_service import DocumentService
 
@@ -136,15 +137,17 @@ def download_plan(plan_id):
         if not plan:
             return jsonify({'error': 'Plan not found'}), 404
 
-        file_path = plan['file_path']
-
-        if not os.path.exists(file_path):
+        # Storage 優先 / ローカルfallback でバイト列を取得
+        file_bytes = plan_service.get_plan_file_bytes(plan_id, user_id)
+        if not file_bytes:
             return jsonify({'error': 'File not found'}), 404
 
+        download_name = plan.get('filename') or f'{plan_id}.docx'
         return send_file(
-            file_path,
+            io.BytesIO(file_bytes),
             as_attachment=True,
-            download_name=plan['filename']
+            download_name=download_name,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
 
     except Exception as e:

@@ -92,18 +92,38 @@ class PlanService:
     # ─── 保存 ─────────────────────────────────────────────────────────────────
 
     def save_plan(self, user_id: str, data: dict, file_path: str) -> dict:
-        """計画書メタデータを保存して返す"""
+        """計画書メタデータを保存して返す。
+        生成された DOCX を Supabase Storage にもアップロードして永続化する。"""
         plan_id = str(uuid.uuid4())
         filename = Path(file_path).name if file_path else 'unknown.docx'
 
         file_size = 0
+        file_bytes = b''
         if file_path and Path(file_path).exists():
             file_size = Path(file_path).stat().st_size
+            try:
+                file_bytes = Path(file_path).read_bytes()
+            except Exception as e:
+                print(f'⚠️ 生成DOCX読み込み失敗: {e}')
 
         now = datetime.now().isoformat()
 
         if self._sb:
             try:
+                # 生成された DOCX を Supabase Storage にアップロード（永続化）
+                storage_path = None
+                if file_bytes:
+                    from services import storage_service
+                    storage_path = storage_service.upload(
+                        category='plans',
+                        file_id=plan_id,
+                        file_bytes=file_bytes,
+                        filename_ext='.docx',
+                        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    )
+                    if storage_path:
+                        print(f'✅ 生成計画書を Storage に永続化: {storage_path}')
+
                 row = {
                     'id': plan_id,
                     'user_id': user_id,
@@ -123,6 +143,7 @@ class PlanService:
                     'client': data.get('client', ''),
                     'contractor': data.get('contractor', ''),
                     'full_data': json.dumps(data, ensure_ascii=False),
+                    'storage_path': storage_path,
                 }
                 self._sb.table('plans').insert(row).execute()
                 return self._normalize_plan(row)
@@ -161,12 +182,53 @@ class PlanService:
         except Exception as e:
             raise Exception(f'計画書の保存に失敗しました: {str(e)}')
 
+    # ─── ファイル取得（ダウンロード用） ──────────────────────────────────────
+
+    def get_plan_file_bytes(self, plan_id: str, user_id: str) -> Optional[bytes]:
+        """計画書 DOCX のバイト列を返す。Storage 優先 → ローカルファイル fallback。"""
+        plan = self.get_plan(plan_id, user_id)
+        if not plan:
+            return None
+
+        # 1) Storage から取得
+        storage_path = plan.get('storage_path')
+        if storage_path:
+            from services import storage_service
+            data = storage_service.download(storage_path)
+            if data is not None:
+                return data
+
+        # 2) ローカルファイルから取得（fallback）
+        local_path = plan.get('file_path')
+        if local_path and Path(local_path).exists():
+            try:
+                return Path(local_path).read_bytes()
+            except Exception:
+                pass
+        return None
+
     # ─── 削除 ─────────────────────────────────────────────────────────────────
 
     def delete_plan(self, plan_id: str, user_id: str) -> bool:
-        """計画書を削除"""
+        """計画書を削除。Storage上のファイルも削除する。"""
         if self._sb:
             try:
+                # 1) Storage 上のファイルを削除
+                try:
+                    res_fetch = (
+                        self._sb.table('plans')
+                        .select('storage_path')
+                        .eq('id', plan_id)
+                        .eq('user_id', user_id)
+                        .execute()
+                    )
+                    if res_fetch.data and res_fetch.data[0].get('storage_path'):
+                        from services import storage_service
+                        storage_service.delete(res_fetch.data[0]['storage_path'])
+                except Exception as e:
+                    print(f'⚠️ Storage削除失敗（DBは削除続行）: {e}')
+
+                # 2) DB行削除
                 res = (
                     self._sb.table('plans')
                     .delete()
@@ -268,13 +330,19 @@ class PlanService:
             except Exception:
                 pass
 
+        storage_path = row.get('storage_path')
+        local_path = row.get('file_path', '')
+        # Storage または ローカルファイルがあれば file_exists = True
+        file_exists = bool(storage_path) or bool(local_path and Path(local_path).exists())
+
         return {
             'id': row.get('id', ''),
             'user_id': row.get('user_id', ''),
             'filename': row.get('filename', ''),
-            'file_path': row.get('file_path', ''),
+            'file_path': local_path,
             'file_size': row.get('file_size', 0),
-            'file_exists': bool(row.get('file_path') and Path(row.get('file_path', '')).exists()),
+            'file_exists': file_exists,
+            'storage_path': storage_path,
             'status': row.get('status', 'completed'),
             'created_at': row.get('created_at', ''),
             'updated_at': row.get('updated_at', ''),
