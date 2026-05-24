@@ -5,6 +5,7 @@ POST   /api/templates/          テンプレートアップロード（管理者
 DELETE /api/templates/<id>      テンプレート削除（管理者のみ）
 GET    /api/templates/<id>/download  テンプレートファイルダウンロード（認証必須）
 """
+import io
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.template_service import TemplateService
@@ -104,14 +105,16 @@ def download_template(template_id: str):
         if not template:
             return jsonify({'error': 'テンプレートが見つかりません'}), 404
 
-        file_path = _template_service.get_file_path(template_id)
-        if not file_path.exists():
+        file_bytes = _template_service.get_file_bytes(template_id)
+        if not file_bytes:
             return jsonify({'error': 'テンプレートファイルが見つかりません'}), 404
 
+        download_name = template.get('original_filename') or f'{template["name"]}.docx'
         return send_file(
-            str(file_path),
+            io.BytesIO(file_bytes),
             as_attachment=True,
-            download_name=template.get('original_filename', f'{template["name"]}.docx'),
+            download_name=download_name,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
     except Exception as e:
         return jsonify({'error': 'ダウンロードに失敗しました', 'message': str(e)}), 500
