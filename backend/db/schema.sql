@@ -54,10 +54,29 @@ CREATE TABLE IF NOT EXISTS templates (
   created_at        TEXT NOT NULL
 );
 
+-- ── 過去事例テーブル ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS past_cases (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  description       TEXT DEFAULT '',
+  project_type      TEXT DEFAULT '',
+  client            TEXT DEFAULT '',
+  location          TEXT DEFAULT '',
+  year              TEXT DEFAULT '',
+  original_filename TEXT,
+  file_data_b64     TEXT,  -- base64エンコードされたDOCXファイル内容
+  file_size         INTEGER DEFAULT 0,
+  created_at        TEXT NOT NULL,
+  uploaded_by       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS past_cases_created_at_idx ON past_cases (created_at DESC);
+
 -- ============================================================
 -- RLS（Row Level Security）を無効化（サーバーサイド専用アクセス）
 -- Service Role Key を使用する場合は RLS 不要
 -- ============================================================
-ALTER TABLE users     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE plans     DISABLE ROW LEVEL SECURITY;
-ALTER TABLE templates DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE plans      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE templates  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE past_cases DISABLE ROW LEVEL SECURITY;

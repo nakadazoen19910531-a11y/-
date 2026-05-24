@@ -234,3 +234,76 @@ export async function downloadTemplate(id: string, filename: string): Promise<vo
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// ===== 過去事例（施工計画書） =====
+
+export interface PastCase {
+  id: string;
+  name: string;
+  description: string;
+  project_type: string;
+  client: string;
+  location: string;
+  year: string;
+  original_filename: string;
+  size: number;
+  created_at: string;
+  uploaded_by: string;
+  file_exists: boolean;
+}
+
+export interface PastCasesResponse {
+  status: string;
+  past_cases: PastCase[];
+  total: number;
+}
+
+export async function getPastCases(): Promise<PastCasesResponse> {
+  return apiGet<PastCasesResponse>('/past-cases/');
+}
+
+export async function uploadPastCase(
+  file: File,
+  fields: {
+    name: string;
+    description?: string;
+    project_type?: string;
+    client?: string;
+    location?: string;
+    year?: string;
+  }
+): Promise<{ status: string; past_case: PastCase }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', fields.name);
+  formData.append('description', fields.description || '');
+  formData.append('project_type', fields.project_type || '');
+  formData.append('client', fields.client || '');
+  formData.append('location', fields.location || '');
+  formData.append('year', fields.year || '');
+  return apiUpload<{ status: string; past_case: PastCase }>('/past-cases/', formData);
+}
+
+export async function deletePastCase(id: string): Promise<void> {
+  await apiDelete(`/past-cases/${id}`);
+}
+
+export async function downloadPastCase(id: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/past-cases/${id}/download`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, '過去事例のダウンロードに失敗しました');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

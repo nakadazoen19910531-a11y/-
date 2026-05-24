@@ -11,6 +11,7 @@ import {
   X,
   User,
   LayoutTemplate,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -46,6 +47,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
       label: 'テンプレート管理',
       href:  '/templates',
       icon:  <LayoutTemplate className="h-5 w-5" />,
+    },
+    {
+      label: '過去事例（施工計画書）',
+      href:  '/past-cases',
+      icon:  <BookOpen className="h-5 w-5" />,
     },
     {
       label: 'NotebookLM連携',
