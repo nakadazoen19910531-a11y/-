@@ -78,6 +78,7 @@ def register_blueprints(app: Flask) -> None:
     from routes.health import health_bp
     from routes.templates import templates_bp
     from routes.past_cases import past_cases_bp
+    from routes.design_documents import design_documents_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(plans_bp, url_prefix='/api/plans')
@@ -85,6 +86,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(health_bp, url_prefix='/api/health')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(past_cases_bp, url_prefix='/api/past-cases')
+    app.register_blueprint(design_documents_bp, url_prefix='/api/design-documents')
 
 
 def register_error_handlers(app: Flask) -> None:

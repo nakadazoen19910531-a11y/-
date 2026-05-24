@@ -307,3 +307,83 @@ export async function downloadPastCase(id: string, filename: string): Promise<vo
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// ===== 設計図書 =====
+
+export interface DesignDocument {
+  id: string;
+  name: string;
+  description: string;
+  document_type: string;   // 図書種別: 契約図書/図面/仕様書/数量計算書/その他
+  project_name: string;
+  client: string;
+  location: string;
+  year: string;
+  original_filename: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  uploaded_by: string;
+  file_exists: boolean;
+}
+
+export interface DesignDocumentsResponse {
+  status: string;
+  design_documents: DesignDocument[];
+  total: number;
+}
+
+export async function getDesignDocuments(): Promise<DesignDocumentsResponse> {
+  return apiGet<DesignDocumentsResponse>('/design-documents/');
+}
+
+export async function uploadDesignDocument(
+  file: File,
+  fields: {
+    name: string;
+    description?: string;
+    document_type?: string;
+    project_name?: string;
+    client?: string;
+    location?: string;
+    year?: string;
+  }
+): Promise<{ status: string; design_document: DesignDocument }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', fields.name);
+  formData.append('description', fields.description || '');
+  formData.append('document_type', fields.document_type || '');
+  formData.append('project_name', fields.project_name || '');
+  formData.append('client', fields.client || '');
+  formData.append('location', fields.location || '');
+  formData.append('year', fields.year || '');
+  return apiUpload<{ status: string; design_document: DesignDocument }>(
+    '/design-documents/',
+    formData
+  );
+}
+
+export async function deleteDesignDocument(id: string): Promise<void> {
+  await apiDelete(`/design-documents/${id}`);
+}
+
+export async function downloadDesignDocument(id: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/design-documents/${id}/download`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, '設計図書のダウンロードに失敗しました');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

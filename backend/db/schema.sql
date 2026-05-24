@@ -72,11 +72,35 @@ CREATE TABLE IF NOT EXISTS past_cases (
 
 CREATE INDEX IF NOT EXISTS past_cases_created_at_idx ON past_cases (created_at DESC);
 
+-- ── 設計図書テーブル ──────────────────────────────────────────
+-- 公共工事の設計図書（契約書・図面・仕様書・数量計算書等）を保管
+-- 施工計画書作成の原典となる最重要資料
+CREATE TABLE IF NOT EXISTS design_documents (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  description       TEXT DEFAULT '',
+  document_type     TEXT DEFAULT '',  -- 図書種別: 契約図書/図面/仕様書/数量計算書/その他
+  project_name      TEXT DEFAULT '',  -- 関連案件名
+  client            TEXT DEFAULT '',
+  location          TEXT DEFAULT '',
+  year              TEXT DEFAULT '',
+  original_filename TEXT,
+  mime_type         TEXT DEFAULT 'application/octet-stream',
+  file_data_b64     TEXT,  -- base64エンコードされたファイル内容（PDF/DOCX/XLSX/ZIP対応）
+  file_size         INTEGER DEFAULT 0,
+  created_at        TEXT NOT NULL,
+  uploaded_by       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS design_documents_created_at_idx ON design_documents (created_at DESC);
+CREATE INDEX IF NOT EXISTS design_documents_project_name_idx ON design_documents (project_name);
+
 -- ============================================================
 -- RLS（Row Level Security）を無効化（サーバーサイド専用アクセス）
 -- Service Role Key を使用する場合は RLS 不要
 -- ============================================================
-ALTER TABLE users      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE plans      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE templates  DISABLE ROW LEVEL SECURITY;
-ALTER TABLE past_cases DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE plans            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE templates        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE past_cases       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE design_documents DISABLE ROW LEVEL SECURITY;
