@@ -67,8 +67,8 @@ def upload_template():
         file_bytes = file.read()
         if len(file_bytes) == 0:
             return jsonify({'error': 'ファイルが空です'}), 400
-        if len(file_bytes) > 50 * 1024 * 1024:  # 50 MB 上限
-            return jsonify({'error': 'ファイルサイズは50MB以下にしてください'}), 400
+        if len(file_bytes) > 500 * 1024 * 1024:  # 500 MB 上限
+            return jsonify({'error': 'ファイルサイズは500MB以下にしてください'}), 400
 
         template = _template_service.save(name, description, file_bytes, file.filename)
         return jsonify({'status': 'success', 'template': template}), 201

@@ -38,6 +38,9 @@ def create_app(config_name: str = None) -> Flask:
         from config.development import DevConfig
         app.config.from_object(DevConfig)
 
+    # 最大リクエストサイズを 500MB に設定（過去事例・設計図書の大容量PDF対応）
+    app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+
     # Enable CORS
     CORS(app, resources={
         r"/api/*": {
@@ -79,6 +82,7 @@ def register_blueprints(app: Flask) -> None:
     from routes.templates import templates_bp
     from routes.past_cases import past_cases_bp
     from routes.design_documents import design_documents_bp
+    from routes.admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(plans_bp, url_prefix='/api/plans')
@@ -87,6 +91,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(past_cases_bp, url_prefix='/api/past-cases')
     app.register_blueprint(design_documents_bp, url_prefix='/api/design-documents')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
 
 def register_error_handlers(app: Flask) -> None:

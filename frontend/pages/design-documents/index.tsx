@@ -373,7 +373,7 @@ const DesignDocumentsPage: NextPage = () => {
                           ファイルをドロップ、またはクリックして選択
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          PDF / DOCX / XLSX / ZIP（最大100MB）
+                          PDF / DOCX / XLSX / ZIP（最大500MB）
                         </p>
                       </>
                     )}

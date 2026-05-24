@@ -82,9 +82,9 @@ def upload_document():
         file_bytes = file.read()
         if len(file_bytes) == 0:
             return jsonify({'error': 'ファイルが空です'}), 400
-        # 設計図書は大きい場合があるので上限を100MBに拡大
-        if len(file_bytes) > 100 * 1024 * 1024:
-            return jsonify({'error': 'ファイルサイズは100MB以下にしてください'}), 400
+        # 設計図書は大きい場合があるので上限を500MBに拡大
+        if len(file_bytes) > 500 * 1024 * 1024:
+            return jsonify({'error': 'ファイルサイズは500MB以下にしてください'}), 400
 
         doc = _service.save(
             name=name,

@@ -81,9 +81,9 @@ def upload_past_case():
         file_bytes = file.read()
         if len(file_bytes) == 0:
             return jsonify({'error': 'ファイルが空です'}), 400
-        # 過去事例（PDF・Excel等含む）は最大100MB
-        if len(file_bytes) > 100 * 1024 * 1024:
-            return jsonify({'error': 'ファイルサイズは100MB以下にしてください'}), 400
+        # 過去事例（PDF・Excel等含む）は最大500MB
+        if len(file_bytes) > 500 * 1024 * 1024:
+            return jsonify({'error': 'ファイルサイズは500MB以下にしてください'}), 400
 
         past_case = _past_case_service.save(
             name=name,
